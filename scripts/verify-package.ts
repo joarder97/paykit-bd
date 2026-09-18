@@ -12,15 +12,46 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { gunzipSync } from "node:zlib";
 
 const root = process.cwd();
 const failures: string[] = [];
 
+/**
+ * Only ever used for npm, npx and node. Anything else — copying a file, reading
+ * an archive — is done with Node's own APIs, because `shell: true` resolves
+ * through cmd.exe on Windows and a Unix coreutil like `cp` is simply absent
+ * there. That is a bug that hides from anyone developing in a POSIX shell on
+ * the same machine.
+ */
 function run(cmd: string, args: string[], cwd: string): string {
   return execFileSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], shell: true });
+}
+
+/**
+ * List the regular files in a .tgz without shelling out to `tar`.
+ *
+ * npm writes plain ustar, so walking the 512-byte headers is enough, and it
+ * keeps this script working identically under PowerShell, cmd, bash and CI.
+ */
+function listTarball(file: string): string[] {
+  const buf = gunzipSync(readFileSync(file));
+  const names: string[] = [];
+  const cstr = (b: Buffer): string => b.toString("utf8").replace(/\0.*$/s, "");
+
+  for (let offset = 0; offset + 512 <= buf.length; ) {
+    const header = buf.subarray(offset, offset + 512);
+    const name = cstr(header.subarray(0, 100));
+    if (name === "") break; // two zero blocks mark the end of the archive
+    const size = Number.parseInt(cstr(header.subarray(124, 136)).trim(), 8) || 0;
+    const typeFlag = String.fromCharCode(header[156] ?? 0);
+    if (typeFlag === "0" || typeFlag === "\0") names.push(name);
+    offset += 512 + Math.ceil(size / 512) * 512;
+  }
+  return names;
 }
 
 function check(name: string, fn: () => void) {
@@ -45,19 +76,16 @@ if (!statSync(join(root, tarball), { throwIfNoEntry: false })) {
   throw new Error(`npm pack did not produce ${tarball}`);
 }
 
-// Read the manifest from the tarball rather than from `npm pack --json`, whose
-// shape is not stable across npm majors: npm 11 returns an array of packages,
-// npm 12 an object keyed by package name. The release workflow installs
-// npm@latest while CI uses the bundled one, so this script saw both — and only
-// the tarball itself is the same under every version.
-const shipped = run("tar", ["-tzf", tarball], root)
-  .split("\n")
-  .map((line) => line.trim().replace(/^package\//, ""))
-  .filter((line) => line !== "" && !line.endsWith("/"));
+// Read the manifest out of the tarball rather than from `npm pack --json`,
+// whose shape is not stable across npm majors: npm 11 returns an array of
+// packages, npm 12 an object keyed by package name. The release workflow pins
+// npm 11 while a developer machine may have either, and the tarball is the one
+// thing that looks the same under every version.
+const shipped = listTarball(join(root, tarball)).map((p) => p.replace(/^package\//, ""));
 
 const work = mkdtempSync(join(tmpdir(), "paykit-verify-"));
 console.log(`Installing ${tarball} into a clean project…\n`);
-run("cp", [tarball, work], root);
+copyFileSync(join(root, tarball), join(work, tarball));
 writeFileSync(
   join(work, "package.json"),
   JSON.stringify({ name: "verify", version: "1.0.0", type: "module", dependencies: { "paykit-bd": `file:./${tarball}` } }),
