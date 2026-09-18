@@ -73,5 +73,18 @@ jobs:
       - name: Verify the package
         run: pnpm verify:package
 
+      # Without this, a missing trusted-publisher configuration surfaces as
+      # `404 Not Found - PUT /paykit-bd`, which reads like the package is gone
+      # rather than like the workflow has no credential.
+      - name: Check the package is bootstrapped
+        run: |
+          NAME="$(node -p "require('./package.json').name")"
+          CODE="$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/$NAME")"
+          if [ "$CODE" = "404" ]; then
+            echo "::error::$NAME does not exist on npm yet. Trusted publishing is configured per package, so the first version has to be published by hand (npm publish, with a 2FA code). Then set the trusted publisher: npmjs.com -> $NAME -> Settings -> Trusted Publisher -> GitHub Actions, repo ${{ github.repository }}, workflow release.yml."
+            exit 1
+          fi
+          echo "$NAME exists on the registry (HTTP $CODE); proceeding."
+
       - name: Publish
         run: npm publish --provenance --access public
