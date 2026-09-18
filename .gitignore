@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Credentials — never commit. .env.example is the only env file that belongs in git.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
+
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

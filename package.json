@@ -1,0 +1,77 @@
+{
+  "name": "paykit-bd",
+  "version": "0.1.0",
+  "description": "Typed, zero-dependency payment clients for Bangladeshi gateways. bKash tokenized checkout with a correct token lifecycle and real AWS SNS webhook verification.",
+  "keywords": [
+    "bkash",
+    "bangladesh",
+    "payment",
+    "payment-gateway",
+    "tokenized-checkout",
+    "webhook",
+    "sns",
+    "nagad",
+    "sslcommerz",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "joarder97",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joarder97/paykit-bd.git"
+  },
+  "homepage": "https://github.com/joarder97/paykit-bd#readme",
+  "bugs": {
+    "url": "https://github.com/joarder97/paykit-bd/issues"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./bkash": {
+      "types": "./dist/bkash/index.d.ts",
+      "import": "./dist/bkash/index.js",
+      "require": "./dist/bkash/index.cjs"
+    },
+    "./bkash/next": {
+      "types": "./dist/bkash/adapters/next.d.ts",
+      "import": "./dist/bkash/adapters/next.js",
+      "require": "./dist/bkash/adapters/next.cjs"
+    },
+    "./bkash/express": {
+      "types": "./dist/bkash/adapters/express.d.ts",
+      "import": "./dist/bkash/adapters/express.js",
+      "require": "./dist/bkash/adapters/express.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
+    "smoke": "node scripts/sandbox-smoke.ts",
+    "check": "npm run typecheck && npm run test && npm run build",
+    "prepublishOnly": "npm run check"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "pnpm@11.22.0"
+}
