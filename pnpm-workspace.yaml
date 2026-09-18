@@ -1,2 +1,9 @@
 allowBuilds:
   esbuild: true
+
+# tsup 8.5.1 pins esbuild ^0.27.0, but 0.27.x carries GHSA-g7r4-m6w7-qqqr
+# (arbitrary file read via esbuild's dev server on Windows). This project never
+# runs that server — tsup only uses esbuild as a bundler — so the advisory does
+# not apply in practice. Overridden anyway to keep the alert list clean.
+overrides:
+  esbuild: ">=0.28.1"
