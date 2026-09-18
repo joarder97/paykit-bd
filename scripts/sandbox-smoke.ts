@@ -69,6 +69,35 @@ await step("grant a token", async () => {
   if (after.acquisitionsUsed !== 1) throw new Error(`expected exactly 1 acquisition, got ${after.acquisitionsUsed}`);
 });
 
+await step("refresh the token (spends 1 of 2 for the hour)", async () => {
+  const before = await client.tokenBudget();
+  await client.refreshToken();
+  const after = await client.tokenBudget();
+  line("refreshes used", `${before.refreshesUsed} -> ${after.refreshesUsed}/${after.refreshesAllowed}`);
+  if (after.refreshesUsed !== before.refreshesUsed + 1) {
+    throw new Error("a refresh must be counted against the hourly budget");
+  }
+  // The budget is now spent down to 1. Anything past 2 in an hour gets the
+  // merchant account blocked, which is why the manager counts rather than hopes.
+});
+
+await step("create an agreement (mode 0000)", async () => {
+  const agreement = await client.createAgreement({ payerReference: "01770618575" });
+  line("paymentId", agreement.paymentId);
+  line("status", agreement.status);
+  if (!agreement.redirectUrl) throw new Error("mode 0000 must return a bkashURL for the OTP step");
+
+  // Executing before the customer has entered an OTP must be refused.
+  const refused = await client.executeAgreement(agreement.paymentId).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  if (!(refused instanceof BkashError) || refused.code !== "2054") {
+    throw new Error(`expected 2054 Agreement execution pre-requisite, got ${(refused as BkashError)?.code}`);
+  }
+  line("premature execute", `${refused.code} (correctly refused)`);
+});
+
 await step("create a one-off payment (mode 0011)", async () => {
   const payment = await client.createPayment({ amount: "12.50", reference, payerReference: "01770618575" });
   paymentId = payment.paymentId;
@@ -130,12 +159,19 @@ await step("error envelopes are all understood", async () => {
   }
 });
 
-await step("token was reused across every call above", async () => {
+await step("one token served every call above", async () => {
   const budget = await client.tokenBudget();
   line("acquisitions this hour", budget.acquisitionsUsed);
   line("refreshes this hour", `${budget.refreshesUsed}/${budget.refreshesAllowed}`);
-  if (budget.acquisitionsUsed !== 1) {
-    throw new Error(`token was acquired ${budget.acquisitionsUsed} times; it should have been acquired once`);
+  // One grant plus the one deliberate refresh. Every payment, query, agreement
+  // and refund call above rode on those two — no per-call token churn.
+  if (budget.acquisitionsUsed !== 2) {
+    throw new Error(
+      `expected exactly 2 acquisitions (1 grant + 1 deliberate refresh), got ${budget.acquisitionsUsed}`,
+    );
+  }
+  if (budget.refreshesUsed !== 1) {
+    throw new Error(`expected 1 refresh against the hourly budget, got ${budget.refreshesUsed}`);
   }
 });
 

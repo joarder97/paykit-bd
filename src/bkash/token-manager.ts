@@ -1,4 +1,4 @@
-import { NetworkError, RateLimitError } from "../core/errors.ts";
+import { ConfigError, NetworkError, RateLimitError } from "../core/errors.ts";
 import { type Logger, noopLogger, requestJson } from "../core/http.ts";
 import { MemoryTokenStore, type TokenRecord, type TokenStore } from "../core/token-store.ts";
 import { endpoints, type ResolvedBkashConfig } from "./config.ts";
@@ -66,6 +66,51 @@ export class BkashTokenManager {
     // Keep the acquisition history: the rate budget must survive invalidation,
     // otherwise a 401 loop would clear its own circuit breaker.
     await this.#store.set(this.#config.tokenKey, { ...record, expiresAt: 0 });
+  }
+
+  /**
+   * Force one refresh, spending a unit of the hourly budget. Only useful for
+   * proving the refresh path works — normal use should let {@link getToken}
+   * decide. Throws if the budget is already spent.
+   */
+  async refreshNow(): Promise<string> {
+    const record = await this.#store.get(this.#config.tokenKey);
+    if (!record?.refreshToken) {
+      throw new ConfigError("bKash: no refresh_token stored yet — grant a token first.", {
+        provider: "bkash",
+        code: "no_refresh_token",
+      });
+    }
+    const now = Date.now();
+    const refreshes = withinWindow(record.refreshes, now);
+    if (refreshes.length >= this.#config.maxRefreshesPerHour) {
+      throw new RateLimitError(
+        `bKash: refresh budget for this hour is already spent (${refreshes.length}/${this.#config.maxRefreshesPerHour}).`,
+        { provider: "bkash", code: "refresh_budget_spent", retryAt: (refreshes[0] ?? now) + HOUR_MS },
+      );
+    }
+
+    const response = await this.#call(this.#urls.refreshToken, {
+      app_key: this.#config.appKey,
+      app_secret: this.#config.appSecret,
+      refresh_token: record.refreshToken,
+    });
+    if (!response.id_token) {
+      throw new BkashError({
+        code: response.statusCode ?? "no_token",
+        message: `bKash refresh returned no id_token: ${response.statusMessage ?? "no status message"}`,
+        raw: response,
+      });
+    }
+
+    await this.#store.set(this.#config.tokenKey, {
+      idToken: response.id_token,
+      refreshToken: response.refresh_token ?? record.refreshToken,
+      expiresAt: Date.now() + (Number(response.expires_in) || 3600) * 1000,
+      acquisitions: [...withinWindow(record.acquisitions, now), Date.now()],
+      refreshes: [...refreshes, Date.now()],
+    });
+    return response.id_token;
   }
 
   /** What the budget looks like right now. Useful for a health endpoint. */

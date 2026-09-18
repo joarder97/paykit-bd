@@ -104,6 +104,15 @@ export class BkashClient implements PaymentProvider {
     return this.#tokens.budget();
   }
 
+  /**
+   * Force a token refresh, spending one unit of the hourly budget. Normal use
+   * should leave this alone and let the client renew when it needs to; it is
+   * here so the refresh path can be exercised deliberately.
+   */
+  refreshToken(): Promise<string> {
+    return this.#tokens.refreshNow();
+  }
+
   // ---------------------------------------------------------------- agreements
 
   /**

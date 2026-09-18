@@ -4,8 +4,9 @@ Typed, zero-dependency payment clients for Bangladeshi gateways. bKash tokenized
 checkout today; the provider seam is there so Nagad and SSLCommerz slot in
 without rewriting order handling.
 
-Every endpoint, field name and error shape here was checked against the live
-bKash sandbox, not only against the docs. Several of them differ.
+Checked against the live bKash sandbox, not only against the docs — which turned
+out to be wrong or silent in seven places, listed in
+[docs/bkash.md](docs/bkash.md).
 
 ```bash
 npm install paykit-bd
@@ -117,9 +118,11 @@ refunds still sum to the original.
 pnpm smoke
 ```
 
-Runs against the real bKash sandbox using bKash's published demo credentials:
-grants a token, creates a payment, queries it, exercises the error envelopes and
-prints a URL you can open to finish the payment by hand.
+Runs against the real bKash sandbox using bKash's published demo credentials. It
+grants a token, refreshes it and checks the budget moved, creates an agreement
+and a payment, queries the payment, confirms a premature execute is refused,
+exercises the error envelopes, and prints a URL you can open to finish the
+payment by hand. It also runs in CI on every push.
 
 ## API
 
@@ -140,12 +143,25 @@ Adding a gateway: [docs/adding-a-provider.md](docs/adding-a-provider.md).
 
 ## Status
 
-bKash tokenized checkout is complete and sandbox-verified. Nagad and SSLCommerz
-are not written yet — the `PaymentProvider` interface is the seam they plug into.
+bKash tokenized checkout is complete. Nagad and SSLCommerz are not written yet —
+the `PaymentProvider` interface is the seam they plug into.
 
-Everything up to the PIN screen is covered by tests and the sandbox script. A
-fully completed payment needs a human with a test wallet; if you run one, the
-`pnpm smoke` output prints the URL to do it.
+**Verified against the live sandbox:** grant token, refresh token, create
+agreement (0000), create payment (0011, both `sale` and `authorization`), execute,
+query payment, agreement status and cancel, refund and refund status on v2, and
+all four error envelopes.
+
+**Not verified end to end, because it needs a human with a test wallet:** a
+completed payment, and therefore executing an agreement (0001), and a refund of
+real money. Those paths are covered by unit tests against recorded response
+shapes, which is weaker evidence — `pnpm smoke` prints a URL if you want to
+finish a payment by hand and check.
+
+**Not verified at all:** a real inbound IPN message, which needs bKash support to
+register a listener URL against a live merchant account. The SNS verification is
+tested against signatures generated with a real RSA key the same way Amazon
+generates them, but no message from bKash itself has passed through it. If you
+wire one up, an issue saying whether it verified would be useful.
 
 ## License
 
