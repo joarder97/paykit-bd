@@ -1,4 +1,4 @@
-import { NetworkError, ProviderError } from "../core/errors.ts";
+import { brandCheckFor, NetworkError, ProviderError } from "../core/errors.ts";
 
 /** Every documented bKash status code, verbatim from the developer portal. */
 export const BKASH_ERROR_CODES: Record<string, string> = {
@@ -93,6 +93,10 @@ export const CUSTOMER_FAULT_CODES = new Set([
 ]);
 
 export class BkashError extends ProviderError {
+  // Branded like the core errors so `instanceof` holds across this package's
+  // separate entry-point bundles. See the note in src/core/errors.ts.
+  static override [Symbol.hasInstance] = brandCheckFor("BkashError");
+
   /** True when bKash considers the payment already settled — re-query, don't retry. */
   readonly alreadySettled: boolean;
   /** True when the customer caused it (wrong PIN, no balance). */
@@ -101,12 +105,16 @@ export class BkashError extends ProviderError {
   readonly messageBn?: string;
 
   constructor(opts: { code: string; message: string; raw?: unknown; messageBn?: string; retryable?: boolean }) {
-    super(opts.message, {
-      provider: "bkash",
-      code: opts.code,
-      retryable: opts.retryable ?? RETRYABLE_CODES.has(opts.code),
-      raw: opts.raw,
-    });
+    super(
+      opts.message,
+      {
+        provider: "bkash",
+        code: opts.code,
+        retryable: opts.retryable ?? RETRYABLE_CODES.has(opts.code),
+        raw: opts.raw,
+      },
+      ["BkashError"],
+    );
     this.alreadySettled = ALREADY_SETTLED_CODES.has(opts.code);
     this.customerFault = CUSTOMER_FAULT_CODES.has(opts.code);
     this.messageBn = opts.messageBn;

@@ -11,6 +11,7 @@ export {
   ConfigError,
   WebhookVerificationError,
   RateLimitError,
+  brandCheckFor,
 } from "./core/errors.ts";
 
 export {
