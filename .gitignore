@@ -15,3 +15,6 @@ secrets.json
 Thumbs.db
 .idea/
 .vscode/
+
+# npm pack output
+*.tgz

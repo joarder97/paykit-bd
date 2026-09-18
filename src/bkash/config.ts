@@ -147,7 +147,10 @@ export function resolveConfig(config: BkashConfig): ResolvedBkashConfig {
  * BKASH_PASSWORD, BKASH_APP_KEY, BKASH_APP_SECRET, BKASH_BASE_URL,
  * BKASH_CALLBACK_URL and BKASH_WEBHOOK_TOPIC_ARN.
  */
-export function configFromEnv(env: NodeJS.ProcessEnv = process.env): BkashConfig {
+// Typed structurally rather than as NodeJS.ProcessEnv: that namespace is a
+// global from @types/node, and referencing it in a published .d.ts makes this
+// package fail to typecheck for anyone who has not got those types in scope.
+export function configFromEnv(env: Record<string, string | undefined> = process.env): BkashConfig {
   const environment = (env["BKASH_ENV"] ?? "sandbox") as BkashEnvironment;
   return {
     environment,
