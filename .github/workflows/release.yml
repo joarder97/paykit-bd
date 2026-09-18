@@ -1,0 +1,73 @@
+name: Release
+
+# Publishes to npm when a v* tag is pushed.
+#
+# Authentication is npm Trusted Publishing over OIDC — no token is stored in
+# this repository, and none can be stolen from it. It also satisfies npm's
+# requirement that publishes be 2FA-protected, and attaches a signed provenance
+# attestation so anyone installing the package can verify it was built from this
+# commit in this repository rather than from someone's laptop.
+#
+# One-time setup before the first tag will work:
+#   1. The package must already exist on npm — trusted publishing is configured
+#      per package, so version 0.1.0 has to be published by hand first.
+#   2. On npmjs.com: paykit-bd -> Settings -> Trusted Publisher -> GitHub Actions,
+#      with repository joarder97/paykit-bd and workflow file release.yml.
+# After that, `git push origin vX.Y.Z` is the whole release process.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # required for OIDC trusted publishing and provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or newer; the bundled version
+      # lags behind on the runner images.
+      - name: Use an npm that supports trusted publishing
+        run: npm install -g npm@latest && npm --version
+
+      - run: pnpm install --frozen-lockfile
+
+      # A tag that disagrees with package.json would publish a version nobody
+      # can find from the repository. Fail before anything reaches the registry.
+      - name: Tag must match package.json
+        if: github.event_name == 'push'
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          echo "tag=$TAG package.json=$PKG"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::tag v$TAG does not match package.json version $PKG"
+            exit 1
+          fi
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      # Packs the real tarball and installs it into a throwaway project. Nothing
+      # is published that has not been exercised the way a consumer meets it.
+      - name: Verify the package
+        run: pnpm verify:package
+
+      - name: Publish
+        run: npm publish --provenance --access public
