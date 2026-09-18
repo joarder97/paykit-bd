@@ -38,10 +38,14 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
-      # Trusted publishing needs npm 11.5.1 or newer; the bundled version
-      # lags behind on the runner images.
+      # Trusted publishing needs npm 11.5.1 or newer, and the runner images ship
+      # something older. Pinned to the 11 line rather than @latest on purpose:
+      # @latest put an unreviewed npm major into the publish path, and npm 12
+      # promptly changed `npm pack --json` from an array to an object keyed by
+      # package name, which broke the verification step. A release path should
+      # not move under you.
       - name: Use an npm that supports trusted publishing
-        run: npm install -g npm@latest && npm --version
+        run: npm install -g npm@11 && npm --version
 
       - run: pnpm install --frozen-lockfile
 

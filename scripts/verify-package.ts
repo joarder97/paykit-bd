@@ -36,9 +36,24 @@ function check(name: string, fn: () => void) {
 
 console.log("\nBuilding and packing…");
 run("npm", ["run", "build"], root);
-const packed = JSON.parse(run("npm", ["pack", "--json"], root)) as Array<{ filename: string; files: Array<{ path: string }> }>;
-const tarball = packed[0]!.filename;
-const shipped = packed[0]!.files.map((f) => f.path);
+run("npm", ["pack"], root);
+
+const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { name: string; version: string };
+// npm's own naming rule: a scope becomes a leading segment joined by a dash.
+const tarball = `${manifest.name.replace(/^@/, "").replace("/", "-")}-${manifest.version}.tgz`;
+if (!statSync(join(root, tarball), { throwIfNoEntry: false })) {
+  throw new Error(`npm pack did not produce ${tarball}`);
+}
+
+// Read the manifest from the tarball rather than from `npm pack --json`, whose
+// shape is not stable across npm majors: npm 11 returns an array of packages,
+// npm 12 an object keyed by package name. The release workflow installs
+// npm@latest while CI uses the bundled one, so this script saw both — and only
+// the tarball itself is the same under every version.
+const shipped = run("tar", ["-tzf", tarball], root)
+  .split("\n")
+  .map((line) => line.trim().replace(/^package\//, ""))
+  .filter((line) => line !== "" && !line.endsWith("/"));
 
 const work = mkdtempSync(join(tmpdir(), "paykit-verify-"));
 console.log(`Installing ${tarball} into a clean project…\n`);
