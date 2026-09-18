@@ -29,6 +29,12 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # Packs the tarball and installs it into a throwaway project. Catches what
+      # the unit tests structurally cannot: the published package is several
+      # bundles, and two of them disagreeing is invisible when running from source.
+      - name: Verify the published package
+        run: pnpm verify:package
+
   sandbox:
     # Hits bKash's real sandbox with their published demo credentials. Allowed to
     # fail: it goes down, and a red cross on someone else's outage is noise.
